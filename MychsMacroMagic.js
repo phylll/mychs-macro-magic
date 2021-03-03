@@ -3081,6 +3081,230 @@ class MychExpression
         return String(value);
     }
 
+    static Grammar = class
+    {
+        commaOperator(variables)
+        {
+            let a = this.a.evaluate(variables);
+            let b = this.b.evaluate(variables);
+
+            return MychExpression.coerceArgs(a).concat(MychExpression.coerceArgs(b));
+        }
+
+        orOperator(variables)
+        {
+            let a = this.a.evaluate(variables);
+
+            if (MychExpression.coerceBoolean(a))
+            {
+                return a;
+            }
+
+            return this.b.evaluate(variables);
+        }
+
+        andOperator(variables)
+        {
+            let a = this.a.evaluate(variables);
+
+            if (MychExpression.coerceBoolean(a))
+            {
+                return this.b.evaluate(variables);
+            }
+
+            return a;
+        }
+
+        notOperator(variables)
+        {
+            let a = this.a.evaluate(variables);
+
+            return !MychExpression.coerceBoolean(a);
+        }
+
+//        stringConcatExpression = undefined;
+//
+//        orderComparisonExpression = this.OneOf(
+//            this.stringConcatExpression,
+//            this.Sequence(this.numberLessOperator,         {a: this.stringConcatExpression}, "<",  {b: this.stringConcatExpression}),
+//            this.Sequence(this.numberLessEqualOperator,    {a: this.stringConcatExpression}, "<=", {b: this.stringConcatExpression}),
+//            this.Sequence(this.numberGreaterOperator,      {a: this.stringConcatExpression}, ">",  {b: this.stringConcatExpression}),
+//            this.Sequence(this.numberGreaterEqualOperator, {a: this.stringConcatExpression}, ">=", {b: this.stringConcatExpression}),
+//        );
+//
+//        equalComparisonExpression = this.OneOf(
+//            this.orderComparisonExpression,
+//            this.Sequence(this.stringEqualOperator,    {a: this.orderComparisonExpression}, "eq", {b: this.orderComparisonExpression}),
+//            this.Sequence(this.stringNotEqualOperator, {a: this.orderComparisonExpression}, "ne", {b: this.orderComparisonExpression}),
+//            this.Sequence(this.numberEqualOperator,    {a: this.orderComparisonExpression}, "==", {b: this.orderComparisonExpression}),
+//            this.Sequence(this.numberNotEqualOperator, {a: this.orderComparisonExpression}, "!=", {b: this.orderComparisonExpression}),
+//        );
+//        
+//        notExpression = this.OneOf(
+//            this.stringComparisonExpression,
+//            this.Sequence(this.notOperator, "not", {a: this.equalComparisonExpression}),
+//        );
+//
+//        andExpression = this.OneOf(
+//            this.notExpression,
+//            this.Sequence(this.andOperator, {a: this.andExpression}, "and", {b: this.notExpression}),
+//        );
+//
+//        orExpression = this.OneOf(
+//            this.andExpression,
+//            this.Sequence(this.orOperator, {a: this.orExpression}, "or", {b: this.andExpression}),
+//        );
+//
+//        commaExpression = this.OneOf(
+//            this.orExpression,
+//            this.Sequence(this.commaOperator, {a: this.commaExpression}, ",", {b: this.orExpression}),
+//        );
+
+
+        static Token = class
+        {
+            constructor(token)
+            {
+                this.token = token;
+            }
+
+            parse(tokens, tokenOffset)
+            {
+                if (tokens[tokenOffset] == token)
+                {
+                    return [tokenOffset + 1, undefined];
+                }
+
+                return [tokenOffset, undefined];
+            }
+        }
+
+        static Choice = class
+        {
+            constructor(context)
+            {
+                this.context = context;
+            }
+
+            parse(tokens, tokenOffset)
+            {
+                for (let choice = 0; ; ++choice)
+                {
+                    let choiceExpressionFactory = this[choice];
+
+                    if (choiceExpressionFactory == undefined)
+                    {
+                        return [tokenOffset, undefined];
+                    }
+
+                    let choiceExpression = choiceExpressionFactory(this.context);
+                    let [choiceTokenOffset, operation] = choiceExpression.parse(tokens, tokenOffset);
+
+                    if (choiceTokenOffset == tokens.length)
+                    {
+                        return [choiceTokenOffset, operation];
+                    }
+                }
+            }
+        }
+
+        static Sequence = class
+        {
+            constructor(context, ...items)
+            {
+                this.context = context;
+                this.sequenceExpressions = [];
+
+                for (let item of items)
+                {
+                    switch (typeof(item))
+                    {
+                        case "string":
+                        {
+                            let tokenExpression = new MychExpression.Grammar.Token(item);
+                            this.sequenceExpressions.push(tokenExpression);
+                        }
+                        break;
+
+                        case "object":
+                        {
+                            for (let [identifier, expression] in Object.entries(item))
+                            {
+                                expression.identifier = identifier;
+                                this.sequenceExpressions.push(expression);
+                            }
+                        }
+                        break;
+
+                        default:
+                        {
+                            this.sequenceExpressions.push(item);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            parse(tokens, tokenOffset)
+            {
+                let sequenceTokenOffset = tokenOffset;
+                let operation;
+
+                for (let sequenceExpression of this.sequenceExpressions)
+                {
+                    if (sequenceTokenOffset >= tokens.length)
+                    {
+                        return [tokenOffset, undefined];
+                    }
+
+                    [sequenceTokenOffset, operation] = sequenceExpression.parse(tokens, sequenceTokenOffset);
+
+                    if (sequenceExpression && sequenceExpression.identifier != undefined)
+                    {
+                        this[sequenceExpression.identifier] = operation;
+                    }
+                }
+
+                if (sequenceTokenOffset < tokens.length)
+                {
+                    return [tokenOffset, undefined];
+                }
+
+                return [sequenceTokenOffset, this];
+            }
+        }
+
+        static OrExpression = class extends MychExpression.Grammar.Choice
+        {
+            0 = (context) => new MychExpression.Grammar.Token("value");
+        }
+
+        static CommaExpression = class extends MychExpression.Grammar.Choice
+        {
+            0 = (context) => new MychExpression.Grammar.OrExpression(context);
+            1 = (context) => new MychExpression.Grammar.CommaSequence(context, {a: new MychExpression.Grammar.CommaExpression(context)}, ",", {b: new MychExpression.Grammar.OrExpression(context)});
+        }
+
+        static Expression = MychExpression.Grammar.CommaExpression;
+
+        static CommaSequence = class extends MychExpression.Grammar.Sequence
+        {
+            evaluate(variables)
+            {
+                let a = this.a.evaluate(variables);
+                let b = this.b.evaluate(variables);
+    
+                return MychExpression.coerceArgs(a).concat(MychExpression.coerceArgs(b));
+            }
+        }
+    }
+
+    static parse(context, tokens)
+    {
+        let [expression, numTokensConsumed] = new MychExpression.Grammar.Expression(context).parse(tokens, 0);
+        return expression;
+    }
+
     static operators =
     {
         "**": {
