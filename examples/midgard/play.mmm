@@ -1,0 +1,27 @@
+!rem // testing testing
+!rem
+!mmm customize
+!mmm   set cConfigurable = "My Value"
+!mmm   set cUserSelectedToken = "-Mpwk5mY1VV8TGM6HJvL"
+!mmm   set cUserTargetToken = "-MS7Zuq-JXiICokyWIq5"
+!mmm   set cUserInput = "999"
+!mmm   set cDieRoll = [[20]]
+!mmm end customize
+!mmm script
+!rem   // challenges for testing:
+!rem   // - config input
+!mmm   set customizable cConfigurable = "Default"
+!rem   // - user input
+!mmm   set customizable cUserSelectedToken = selected.token_id
+!mmm   set customizable cUserTargetToken = "@{target|Select target|token_id}"
+!mmm   set customizable cUserInput = "?{Enter a number|0}"
+!rem   // - die rolls: 
+!rem   //   can I separate every roll from any modifiers that depend on user input, to be simulated separately?
+!mmm   set customizable cDieRoll = [[1d20]]
+!rem   // - parameters through m3mgdExchange
+!rem   //   TODO
+!rem
+!rem   // - how to capture and check key outputs / results?
+!mmm   chat: ${cConfigurable}|${cUserInput}|${cUserTargetToken.name}|${cUserSelectedToken.name}|${cDieRoll}
+!rem   // - how to keep track of changes made to external data (character sheets), and revert?
+!mmm end script
